@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>지렁이 게임</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #333;
+            color: #eee;
+            font-family: 'Courier New', Courier, monospace;
+            flex-direction: column;
+            gap: 15px; /* 요소들 사이 간격 추가 */
+        }
+        canvas {
+            background-color: #000;
+            border: 2px solid #eee;
+        }
+        #game-info {
+            display: flex;
+            justify-content: space-between;
+            width: 400px; /* 캔버스 너비와 맞춤 */
+            margin-bottom: 10px;
+        }
+        #score {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        #controls {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #555;
+            color: #eee;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #777;
+        }
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            display: none; /* 초기에는 숨김 */
+            z-index: 10;
+        }
+        #game-over h2 {
+            color: #f00;
+            margin-bottom: 15px;
+        }
+        #game-over p {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+        #game-over button {
+            background-color: #007bff;
+        }
+        #game-over button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-info">
+        <div id="score">점수: 0</div>
+        <div id="controls">
+            <button id="startButton">게임 시작</button>
+            <button id="endButton" disabled>게임 종료</button>
+        </div>
+    </div>
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+
+    <div id="game-over">
+        <h2>게임 오버!</h2>
+        <p>최종 점수: <span id="final-score">0</span></p>
+        <button onclick="window.location.reload()">다시 시작</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score');
+        const startButton = document.getElementById('startButton');
+        const endButton = document.getElementById('endButton');
+        const gameOverDisplay = document.getElementById('game-over');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        const gridSize = 20;
+        let snake = [{ x: 10, y: 10 }];
+        let food = {};
+        let direction = { x: 0, y: 0 }; // 초기 방향은 정지
+        let score = 0;
+        let gameInterval;
+        let isGameOver = false;
+        let gameStarted = false;
+
+        function generateFood() {
+            food = {
+                x: Math.floor(Math.random() * (canvas.width / gridSize)),
+                y: Math.floor(Math.random() * (canvas.height / gridSize))
+            };
+            // 뱀 위에 먹이가 생성되지 않도록 확인
+            for (let i = 0; i < snake.length; i++) {
+                if (food.x === snake[i].x && food.y === snake[i].y) {
+                    generateFood(); // 겹치면 다시 생성
+                    return;
+                }
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 뱀 그리기
+            ctx.fillStyle = 'lime';
+            snake.forEach(segment => {
+                ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 1, gridSize - 1);
+            });
+
+            // 먹이 그리기
+            ctx.fillStyle = 'red';
+            ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 1, gridSize - 1);
+        }
+
+        function update() {
+            if (isGameOver || !gameStarted) return;
+
+            // 뱀 머리 이동 (방향이 {0,0}이 아니어야 움직임)
+            if (direction.x === 0 && direction.y === 0) {
+                return; // 게임 시작 전이거나 멈춰있으면 움직이지 않음
+            }
+            const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+
+            // 게임 오버 조건 확인
+            if (head.x < 0 || head.x >= canvas.width / gridSize || head.y < 0 || head.y >= canvas.height / gridSize || checkCollision(head)) {
+                endGame(true); // 충돌로 인한 게임 오버
+                return;
+            }
+
+            // 뱀 머리 추가
+            snake.unshift(head);
+
+            // 먹이 먹었을 때
+            if (head.x === food.x && head.y === food.y) {
+                score++;
+                scoreDisplay.textContent = '점수: ' + score;
+                generateFood();
+            } else {
+                // 먹이를 먹지 않았으면 꼬리 제거
+                snake.pop();
+            }
+
+            draw();
+        }
+
+        function checkCollision(head) {
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function endGame(collided = false) {
+            isGameOver = true;
+            gameStarted = false;
+            clearInterval(gameInterval);
+            finalScoreDisplay.textContent = score;
+            gameOverDisplay.style.display = 'block';
+            startButton.disabled = false;
+            endButton.disabled = true;
+
+            if (!collided) { // 게임 종료 버튼으로 종료 시 메시지 변경
+                document.querySelector('#game-over h2').textContent = '게임 종료!';
+                document.querySelector('#game-over p').textContent = '최종 점수: ' + score;
+            } else {
+                document.querySelector('#game-over h2').textContent = '게임 오버!';
+                document.querySelector('#game-over p').textContent = '최종 점수: ' + score;
+            }
+        }
+
+        document.addEventListener('keydown', e => {
+            if (!gameStarted || isGameOver) return; // 게임 시작 전이나 게임 오버 시 키 입력 무시
+
+            const key = e.key;
+            if (key === 'ArrowUp' && direction.y === 0) {
+                direction = { x: 0, y: -1 };
+            } else if (key === 'ArrowDown' && direction.y === 0) {
+                direction = { x: 0, y: 1 };
+            } else if (key === 'ArrowLeft' && direction.x === 0) {
+                direction = { x: -1, y: 0 };
+            } else if (key === 'ArrowRight' && direction.x === 0) {
+                direction = { x: 1, y: 0 };
+            }
+        });
+
+        function resetGame() {
+            snake = [{ x: 10, y: 10 }];
+            direction = { x: 0, y: 0 };
+            score = 0;
+            scoreDisplay.textContent = '점수: ' + score;
+            isGameOver = false;
+            gameOverDisplay.style.display = 'none';
+            draw(); // 초기 화면 그리기
+        }
+
+        startButton.addEventListener('click', () => {
+            if (!gameStarted) {
+                resetGame(); // 게임 시작 전 초기화
+                generateFood();
+                gameInterval = setInterval(update, 100);
+                gameStarted = true;
+                startButton.disabled = true;
+                endButton.disabled = false;
+            }
+        });
+
+        endButton.addEventListener('click', () => {
+            if (gameStarted) {
+                endGame(false); // 게임 종료 버튼으로 종료
+            }
+        });
+
+        // 초기 화면 그리기
+        draw();
+    </script>
+</body>
+</html>
